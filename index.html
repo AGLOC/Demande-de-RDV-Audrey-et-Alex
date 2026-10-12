@@ -309,10 +309,7 @@ form:not(.js) input:user-invalid{border-color:var(--error);background:var(--erro
   </aside>
 
   <section class="form-wrap">
-    <form id="rdv" method="post" action="https://formsubmit.co/contact@ag-groupe.fr">
-      <input type="hidden" name="_subject" value="Demande de RDV – formulaire Audrey &amp; Alex">
-      <input type="hidden" name="_template" value="table">
-      <input type="hidden" name="_captcha" value="false">
+    <form id="rdv" method="post">
       <input type="text" id="hp" name="_honey" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
       <fieldset>
         <legend>Vos coordonnées</legend>
@@ -389,7 +386,13 @@ form:not(.js) input:user-invalid{border-color:var(--error);background:var(--erro
 <script>
 (function(){
   // Adresse de réception des demandes (FormSubmit). Laisser vide = mode aperçu, rien n'est envoyé.
-  const ENDPOINT='https://formsubmit.co/ajax/contact@ag-groupe.fr';
+  // ==== Réglages EmailJS (compte EmailJS → à remplacer par vos identifiants) ====
+  const EMAILJS={
+    publicKey:'eMj5QrxLTZRsRZxNz',      // Account → General → Public Key
+    serviceId:'service_njzcf5s',      // Email Services → Service ID
+    templateId:'template_2189ygo'     // Email Templates → Template ID
+  };
+  const SOURCE='formulaire en ligne Audrey & Alex';
   const form=document.getElementById('rdv');
   form.noValidate=true;form.classList.add('js');
   const done=document.getElementById('done');
@@ -458,18 +461,32 @@ form:not(.js) input:user-invalid{border-color:var(--error);background:var(--erro
     rows.forEach(([k,v])=>{const d=document.createElement('div');const dt=document.createElement('dt');dt.textContent=k;const dd=document.createElement('dd');dd.textContent=v;d.append(dt,dd);recap.append(d);});
     $('d-prenom').textContent=$('prenom').value.trim();
     const errBox=$('form-error');errBox.textContent='';
-    if(ENDPOINT){
+    {
       const btn=form.querySelector('.btn');btn.disabled=true;const label=btn.textContent;btn.textContent='Envoi…';
-      const payload={_subject:'Demande de RDV – '+$('prenom').value.trim()+' '+$('nom').value.trim(),_template:'table',_captcha:'false',_honey:$('hp').value};
-      rows.forEach(([k,v])=>{payload[k]=v;});
-      if($('email').value.trim())payload._replyto=$('email').value.trim();
+      const now=new Date();
+      const params={
+        source:SOURCE,
+        prenom:$('prenom').value.trim(),
+        nom:$('nom').value.trim(),
+        telephone:$('tel').value.trim(),
+        email:$('email').value.trim(),
+        adresse:$('adresse').value.trim(),
+        code_postal:$('cp').value.trim(),
+        ville:$('ville').value.trim(),
+        jours:days.join(', '),
+        creneaux:slots.join(' · '),
+        projet:$('projet').value.trim()||'Non précisé',
+        date_demande:now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' à '+now.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})
+      };
       try{
-        const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});
-        const j=await r.json().catch(()=>({}));
-        const pending=/activat/i.test(j.message||'');
-        if(!pending&&(!r.ok||j.success===false||j.success==='false'))throw new Error(j.message||'refus');
+        if($('hp').value)throw 'robot';
+        if(/^VOTRE_/.test(EMAILJS.publicKey+EMAILJS.serviceId+EMAILJS.templateId))throw new Error('config');
+        const r=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:EMAILJS.serviceId,template_id:EMAILJS.templateId,user_id:EMAILJS.publicKey,template_params:params})});
+        if(!r.ok)throw new Error(await r.text().catch(()=>'refus'));
       }catch(err){
-        errBox.dataset.v='';errBox.textContent='L’envoi n’a pas abouti. Vérifiez votre connexion internet et cliquez à nouveau sur « Être rappelé ».';
+        if(err==='robot'){btn.disabled=false;btn.textContent=label;form.hidden=true;done.hidden=false;return;}
+        console.error('EmailJS',err);
+        errBox.dataset.v='';errBox.textContent=(err&&err.message==='config')?'Le formulaire n’est pas encore relié à la boîte e-mail (identifiants EmailJS manquants).':'L’envoi n’a pas abouti. Vérifiez votre connexion internet et cliquez à nouveau sur « Être rappelé ».';
         btn.disabled=false;btn.textContent=label;return;
       }
       btn.disabled=false;btn.textContent=label;
