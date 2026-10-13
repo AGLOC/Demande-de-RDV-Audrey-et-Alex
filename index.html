@@ -388,11 +388,22 @@ form:not(.js) input:user-invalid{border-color:var(--error);background:var(--erro
   // Adresse de réception des demandes (FormSubmit). Laisser vide = mode aperçu, rien n'est envoyé.
   // ==== Réglages EmailJS (compte EmailJS → à remplacer par vos identifiants) ====
   const EMAILJS={
-    publicKey:'eMj5QrxLTZRsRZxNz',      // Account → General → Public Key
-    serviceId:'service_njzcf5s',      // Email Services → Service ID
-    templateId:'template_2189ygo'     // Email Templates → Template ID
+    publicKey:'eMj5QrxLTZRsRZxNz',          // Account → General → Public Key
+    // E-mail d'alerte envoyé à l'équipe (contact@ag-groupe.fr)
+    equipe:{serviceId:'service_45gfzv5',templateId:'template_2189ygo'},
+    // E-mail de confirmation envoyé au client
+    client:{serviceId:'service_45gfzv5',templateId:'template_oo9z1yh'}
   };
   const SOURCE='formulaire en ligne Audrey & Alex';
+  // Habillage des e-mails (équipe + confirmation client)
+  const MARQUE={
+    marque:'Audrey & Alex',
+    accroche:'L’accompagnement personnalisé de votre projet immobilier',
+    accent:'#936037',
+    equipe:'Audrey ou Alex',
+    signature:'Audrey & Alex',
+    logo_url:'https://agloc.github.io/Demande-de-RDV-Audrey-et-Alex/logo-email.png'
+  };
   const form=document.getElementById('rdv');
   form.noValidate=true;form.classList.add('js');
   const done=document.getElementById('done');
@@ -465,6 +476,7 @@ form:not(.js) input:user-invalid{border-color:var(--error);background:var(--erro
       const btn=form.querySelector('.btn');btn.disabled=true;const label=btn.textContent;btn.textContent='Envoi…';
       const now=new Date();
       const params={
+        ...MARQUE,
         source:SOURCE,
         prenom:$('prenom').value.trim(),
         nom:$('nom').value.trim(),
@@ -480,9 +492,11 @@ form:not(.js) input:user-invalid{border-color:var(--error);background:var(--erro
       };
       try{
         if($('hp').value)throw 'robot';
-        if(/^VOTRE_/.test(EMAILJS.publicKey+EMAILJS.serviceId+EMAILJS.templateId))throw new Error('config');
-        const r=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:EMAILJS.serviceId,template_id:EMAILJS.templateId,user_id:EMAILJS.publicKey,template_params:params})});
-        if(!r.ok)throw new Error(await r.text().catch(()=>'refus'));
+        const send=async cfg=>{const r=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:cfg.serviceId,template_id:cfg.templateId,user_id:EMAILJS.publicKey,template_params:params})});if(!r.ok)throw new Error(await r.text().catch(()=>'refus'));};
+        // 1. Alerte équipe (obligatoire pour valider la demande)
+        await send(EMAILJS.equipe);
+        // 2. Confirmation client (si elle échoue, la demande reste valide)
+        try{await send(EMAILJS.client);}catch(e2){console.error('Confirmation client non envoyée',e2);}
       }catch(err){
         if(err==='robot'){btn.disabled=false;btn.textContent=label;form.hidden=true;done.hidden=false;return;}
         console.error('EmailJS',err);
